@@ -1,0 +1,35 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Backend API for Audio Knowledge Base Q&A Application",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node ./node_modules/nodemon/bin/nodemon.js src/index.js",
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate": "node src/db/migrate.js",
+    "test-db": "node src/db/test-connection.js"
+  },
+  "keywords": [
+    "audio",
+    "transcription",
+    "qa",
+    "api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "bull": "^4.16.5",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "multer": "^2.0.2",
+    "openai": "^6.10.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}

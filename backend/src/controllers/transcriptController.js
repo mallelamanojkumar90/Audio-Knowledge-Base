@@ -6,16 +6,26 @@ const asyncHandler = require('../middleware/asyncHandler');
  */
 exports.getTranscript = asyncHandler(async (req, res) => {
   const { audioFileId } = req.params;
+  const fs = require('fs');
+  const path = require('path');
+  const logFile = path.join(__dirname, '../../debug.log');
+
+  const log = (msg) => fs.appendFileSync(logFile, `${new Date().toISOString()} - ${msg}\n`);
   
+  log(`Fetching transcript for file ${audioFileId}`);
+
   const transcript = await Transcript.findByAudioFileId(audioFileId);
 
   if (!transcript) {
+    log(`No transcript found for file ${audioFileId}`);
     return res.json({
       success: true,
       data: null,
       message: 'No transcript found for this audio file'
     });
   }
+
+  log(`Transcript found: ID ${transcript.id}, Text Length: ${transcript.transcript_text ? transcript.transcript_text.length : 'N/A'}`);
 
   res.json({
     success: true,
@@ -25,12 +35,11 @@ exports.getTranscript = asyncHandler(async (req, res) => {
 
 /**
  * Generate transcript for an audio file
- * Note: This is a placeholder implementation
- * In production, you would integrate with a real transcription service
  */
 exports.generateTranscript = asyncHandler(async (req, res) => {
   const { audioFileId } = req.params;
   const { AudioFile } = require('../models');
+  const transcriptionService = require('../services/groqTranscriptionService'); // Using Groq instead of OpenAI
 
   // Check if audio file exists
   const audioFile = await AudioFile.findById(audioFileId);
@@ -42,35 +51,67 @@ exports.generateTranscript = asyncHandler(async (req, res) => {
   }
 
   // Check if transcript already exists
+  // Check if transcript already exists
   const existingTranscript = await Transcript.findByAudioFileId(audioFileId);
   if (existingTranscript) {
-    return res.json({
-      success: true,
-      data: existingTranscript,
-      message: 'Transcript already exists'
-    });
+    // Check if the existing transcript is actually valid (has content)
+    if (existingTranscript.transcript_text && existingTranscript.transcript_text.trim().length > 10) {
+      return res.json({
+        success: true,
+        data: existingTranscript,
+        message: 'Transcript already exists'
+      });
+    } else {
+      // Existing transcript is empty or invalid - delete it and regenerate
+      console.log(`Found empty transcript for file ${audioFileId}. Deleting and regenerating...`);
+      await Transcript.delete(existingTranscript.id);
+    }
   }
 
-  // TODO: Integrate with actual transcription service (e.g., OpenAI Whisper, Google Speech-to-Text)
-  // For now, create a placeholder transcript
-  const transcriptData = {
-    audioFileId: parseInt(audioFileId),
-    transcriptText: `This is a placeholder transcript for ${audioFile.original_filename}.\n\nIn a production environment, this would be generated using a speech-to-text service like:\n- OpenAI Whisper API\n- Google Cloud Speech-to-Text\n- Amazon Transcribe\n- AssemblyAI\n\nThe actual audio content would be processed and transcribed here.`,
-    language: 'en',
-    confidenceScore: 0.95,
-    status: 'completed'
-  };
+  try {
+    // Update status to transcribing
+    await AudioFile.updateStatus(audioFileId, 'transcribing');
 
-  const transcript = await Transcript.create(transcriptData);
+    // Transcribe the audio file with retry logic
+    const transcriptionResult = await transcriptionService.transcribeWithRetry(
+      audioFile.file_path,
+      audioFile.original_filename
+    );
 
-  // Update audio file status
-  await AudioFile.updateStatus(audioFileId, 'completed');
+    // Save transcript to database
+    const transcriptData = {
+      audioFileId: parseInt(audioFileId),
+      transcriptText: transcriptionResult.text,
+      language: transcriptionResult.language,
+      confidenceScore: transcriptionResult.confidenceScore,
+      status: transcriptionResult.status
+    };
 
-  res.status(201).json({
-    success: true,
-    message: 'Transcript generated successfully',
-    data: transcript
-  });
+    const transcript = await Transcript.create(transcriptData);
+
+    // Update audio file status to completed
+    await AudioFile.updateStatus(audioFileId, 'completed');
+
+    res.status(201).json({
+      success: true,
+      message: 'Transcript generated successfully',
+      data: transcript
+    });
+
+  } catch (error) {
+    // Update status to failed
+    await AudioFile.updateStatus(audioFileId, 'failed');
+
+    console.error('Transcription error:', error);
+    
+    return res.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to generate transcript',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }
+    });
+  }
 });
 
 /**

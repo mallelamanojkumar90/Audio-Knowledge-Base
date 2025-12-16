@@ -1,13 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const asyncHandler = require('../middleware/asyncHandler');
+const chatController = require('../controllers/chatController');
 
-// Placeholder for chat routes
-// Will be implemented in Phase 4
+// GET /api/chat/:fileId - Get chat history for a file
+router.get('/:fileId', chatController.getChatHistory);
 
-router.post('/:conversationId', asyncHandler(async (req, res) => {
-  res.json({ message: 'Chat endpoint - to be implemented' });
-}));
+// POST /api/chat/:fileId - Send a message to chat about a file
+router.post('/:fileId', chatController.sendMessage);
 
 module.exports = router;
-

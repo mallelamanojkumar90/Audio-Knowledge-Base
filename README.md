@@ -1,149 +1,140 @@
 # Audio Knowledge Base Q&A Application
 
-An intelligent web application that transforms audio files into interactive knowledge bases, enabling users to ask natural language questions and receive accurate answers derived from the audio content.
+A powerful AI-driven application trying to transform audio files into interactive knowledge bases. Users can upload audio lectures, meetings, or podcasts, get accurate transcripts, and ask natural language questions to retrieve specific answers with citations.
 
-## Features
+## 🚀 Key Features
 
-- 🎵 **Audio Upload**: Support for MP3, WAV, M4A, AAC, FLAC formats (up to 500MB)
-- 🎤 **Automatic Transcription**: Powered by OpenAI Whisper API
-- 💬 **AI-Powered Q&A**: Ask questions and get answers using Anthropic Claude API
-- 📝 **Transcript Viewing**: View full transcripts with timestamps
-- 💾 **Conversation History**: Maintain context across multiple questions
+- **🎙️ High-Speed Transcription**:
+  - Powered by **Groq Whisper V3** (Large V3 model).
+  - **Extremely fast** (transcribes hours of audio in minutes).
+  - Supports **Large Files** (up to 500MB) via automatic chunking.
+  - Formats: MP3, WAV, M4A, FLAC, and more.
+- **🧠 Intelligent Q&A (RAG)**:
+  - Ask questions about your audio content.
+  - **Retrieval Augmented Generation (RAG)** finds the exact relevant sections.
+  - **Context Stuffing Fallback**: Works even without a vector database for files up to ~100k tokens using **Llama 3.3 70B**'s large context window.
+- **🤖 Multi-Model AI Service**:
+  - **Groq (Llama 3.3 70B)**: default, ultra-fast, and free/cheap.
+  - **OpenAI (GPT-4o)**: Supported optional fallback.
+  - **Anthropic (Claude 3.5)**: Supported optional fallback.
+- **📊 Interactive UI**:
+  - Upload dashboard.
+  - Full transcript viewer.
+  - ChatGPT-style chat interface with history.
 
-## Tech Stack
+## 🛠️ Tech Stack
 
-### Frontend
-- React with TypeScript
-- Tailwind CSS
-- React Router
+- **Frontend**: React (TypeScript), Tailwind CSS.
+- **Backend**: Node.js (Express).
+- **Database**: PostgreSQL (Metadata & Chat History).
+- **AI Orchestration**: LangChain.js.
+- **AI Providers**: Groq SDK, OpenAI SDK.
+- **Media Processing**: FFmpeg (via fluent-ffmpeg).
 
-### Backend
-- Node.js with Express
-- PostgreSQL
-- Bull/BullMQ for job processing
+## 📋 Prerequisites
 
-### AI Services
-- OpenAI Whisper API (transcription)
-- Anthropic Claude API (question answering)
+- **Node.js**: v18+
+- **PostgreSQL**: v14+ (Local or Cloud)
+- **FFmpeg**: Installed on system (or via `@ffmpeg-installer` which is included).
+- **Groq API Key**: Required for fast transcription & Llama 3 models. [Get one here](https://console.groq.com).
+- **OpenAI API Key**: Recommended for high-quality Embeddings (RAG), but optional (system has fallbacks).
 
-## Project Structure
+## ⚙️ Installation & Setup
 
-```
-.
-├── frontend/          # React frontend application
-├── backend/           # Node.js backend API
-├── .cursor/           # Project planning and documentation
-└── README.md          # This file
-```
+### 1. Clone & Install
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ and npm
-- PostgreSQL 14+
-- Redis (for job queue, optional for MVP)
-- OpenAI API key
-- Anthropic API key
-
-### Installation
-
-1. Clone the repository
 ```bash
 git clone <repository-url>
 cd "Audio KnowledgeBase Q&A App"
-```
 
-2. Install backend dependencies
-```bash
+# Install Backend
 cd backend
 npm install
-```
 
-3. Install frontend dependencies
-```bash
+# Install Frontend
 cd ../frontend
 npm install
 ```
 
-4. Set up environment variables
+### 2. Configure Environment
 
-Backend (create `backend/.env`):
+Create `backend/.env`:
+
 ```env
 PORT=3001
+# Database
 DATABASE_URL=postgresql://user:password@localhost:5432/audio_kb
-OPENAI_API_KEY=your_openai_api_key
-ANTHROPIC_API_KEY=your_anthropic_api_key
-REDIS_URL=redis://localhost:6379
+
+# AI Keys
+GROQ_API_KEY=gsk_...
+# Optional but recommended for better RAG
+OPENAI_API_KEY=sk-...
+# Optional
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Configuration
 NODE_ENV=development
 ```
 
-Frontend (create `frontend/.env`):
+Create `frontend/.env`:
+
 ```env
 REACT_APP_API_URL=http://localhost:3001
 ```
 
-5. Set up the database
+### 3. Setup Database
 
-First, create a PostgreSQL database:
-```sql
-CREATE DATABASE audio_kb;
-```
+Create the database and run migrations:
 
-Then, set the DATABASE_URL in your `backend/.env` file:
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/audio_kb
-```
-
-Run migrations to create the database schema:
 ```bash
-cd backend
+# In psql or PGAdmin
+CREATE DATABASE audio_kb;
+
+# Run Migrations (in backend folder)
 npm run migrate
 ```
 
-Test the database connection:
-```bash
-npm run test-db
-```
+### 4. Run the App
 
-6. Start the development servers
+Start both servers:
 
-Backend:
+**Backend:**
+
 ```bash
 cd backend
 npm run dev
 ```
 
-Frontend (in a new terminal):
+**Frontend:**
+
 ```bash
 cd frontend
 npm start
 ```
 
-The application will be available at `http://localhost:3000`
+Visit `http://localhost:3000` to start using the app.
 
-## Development
+## 💡 How to Use
 
-### Backend Scripts
-- `npm run dev` - Start development server with hot reload
-- `npm run build` - Build for production
-- `npm run migrate` - Run database migrations
-- `npm run test` - Run tests
+1.  **Upload**: Go to the **Files** tab and upload an audio file (drag & drop supported).
+2.  **Transcribe**:
+    - The system will auto-start transcription.
+    - If it fails or is empty, click **Regenerate Transcript**.
+    - Watch the status spinner. Large files (100MB+) may take 2-5 minutes.
+3.  **View**: Click "View Transcript" to see the full text.
+4.  **Chat**: Click **"Start Q&A Chat"** to enter the chat interface. Ask questions like:
+    - _"Summarize the main points of this meeting."_
+    - _"What was said about the Q3 budget?"_
 
-### Frontend Scripts
-- `npm start` - Start development server
-- `npm run build` - Build for production
-- `npm test` - Run tests
+## 🔧 Troubleshooting
 
-## API Documentation
+- **Empty Transcript?**:
+  - This usually happens if the AI service timed out.
+  - Solution: Click the blue **"Regenerate Transcript"** button on the transcript page. The system handles cleaning up old invalid data automatically.
+- **"Context too long"?**:
+  - The system uses specific chunking strategies.
+  - Ensure configuration uses `Llama-3.3-70b` (Groq) which has a 128k context window.
 
-API documentation will be available at `/api/docs` once implemented.
+## 📄 License
 
-## License
-
-[To be determined]
-
-## Contributing
-
-[To be determined]
-
+MIT

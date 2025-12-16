@@ -46,6 +46,7 @@ exports.createFile = asyncHandler(async (req, res) => {
   }
 
   const { filename, originalname, path, size, mimetype } = req.file;
+  console.log(`Processing upload for file: ${originalname} (${(size / 1024 / 1024).toFixed(2)} MB)`);
 
   // Create file record in database
   const fileData = {
@@ -58,10 +59,59 @@ exports.createFile = asyncHandler(async (req, res) => {
   };
 
   const file = await AudioFile.create(fileData);
+  console.log(`Database record created for file ID: ${file.id}`);
+
+  // Trigger transcription asynchronously (don't wait for it)
+  // This allows the upload to complete quickly while transcription happens in background
+  try {
+    const transcriptionService = require('../services/groqTranscriptionService'); // Using Groq
+    const { Transcript } = require('../models');
+    
+    console.log('Transcription service loaded successfully');
+
+    // Start transcription in background
+    (async () => {
+      try {
+        console.log(`Starting background transcription for file ID: ${file.id}`);
+        // Update status to transcribing
+        await AudioFile.updateStatus(file.id, 'transcribing');
+        
+        // Transcribe the audio file
+        const transcriptionResult = await transcriptionService.transcribeWithRetry(
+          file.file_path,
+          file.original_filename
+        );
+
+        // Save transcript to database
+        const transcriptData = {
+          audioFileId: file.id,
+          transcriptText: transcriptionResult.text,
+          language: transcriptionResult.language,
+          confidenceScore: transcriptionResult.confidenceScore,
+          status: transcriptionResult.status
+        };
+
+        await Transcript.create(transcriptData);
+
+        // Update audio file status to completed
+        await AudioFile.updateStatus(file.id, 'completed');
+        
+        console.log(`Transcription completed for file: ${file.original_filename}`);
+      } catch (error) {
+        // Update status to failed
+        await AudioFile.updateStatus(file.id, 'failed');
+        console.error(`Transcription failed for file ${file.original_filename}:`, error.message);
+        console.error(error);
+      }
+    })();
+  } catch (err) {
+    console.error('Error initializing transcription service:', err);
+    // Don't fail the upload response, just log the error
+  }
 
   res.status(201).json({
     success: true,
-    message: 'File uploaded successfully',
+    message: 'File uploaded successfully. Transcription started.',
     data: file
   });
 });
@@ -71,7 +121,11 @@ exports.createFile = asyncHandler(async (req, res) => {
  */
 exports.deleteFile = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const file = await AudioFile.delete(id);
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  // First, get the file info to know the file path
+  const file = await AudioFile.findById(id);
 
   if (!file) {
     return res.status(404).json({
@@ -80,10 +134,23 @@ exports.deleteFile = asyncHandler(async (req, res) => {
     });
   }
 
+  // Delete from database (this will cascade delete related records)
+  const deletedFile = await AudioFile.delete(id);
+
+  // Delete the physical file from filesystem
+  try {
+    if (file.file_path) {
+      await fs.unlink(file.file_path);
+    }
+  } catch (err) {
+    // Log error but don't fail the request if file doesn't exist
+    console.error('Error deleting physical file:', err.message);
+  }
+
   res.json({
     success: true,
     message: 'Audio file deleted successfully',
-    data: file
+    data: deletedFile
   });
 });
 

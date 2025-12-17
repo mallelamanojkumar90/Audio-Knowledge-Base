@@ -6,18 +6,19 @@ class Transcript {
       audioFileId,
       transcriptText,
       wordCount = null,
-      language = 'en'
+      language = 'en',
+      confidenceScore = null
     } = data;
 
     const query = `
       INSERT INTO transcripts (
-        audio_file_id, transcript_text, word_count, language
+        audio_file_id, transcript_text, word_count, language, confidence_score
       )
-      VALUES ($1, $2, $3, $4)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `;
 
-    const values = [audioFileId, transcriptText, wordCount, language];
+    const values = [audioFileId, transcriptText, wordCount, language, confidenceScore];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
@@ -34,14 +35,14 @@ class Transcript {
     return result.rows[0] || null;
   }
 
-  static async update(audioFileId, transcriptText, wordCount = null) {
+  static async update(audioFileId, transcriptText, wordCount = null, confidenceScore = null) {
     const query = `
       UPDATE transcripts
-      SET transcript_text = $1, word_count = $2, updated_at = CURRENT_TIMESTAMP
-      WHERE audio_file_id = $3
+      SET transcript_text = $1, word_count = $2, confidence_score = $3, updated_at = CURRENT_TIMESTAMP
+      WHERE audio_file_id = $4
       RETURNING *
     `;
-    const result = await pool.query(query, [transcriptText, wordCount, audioFileId]);
+    const result = await pool.query(query, [transcriptText, wordCount, confidenceScore, audioFileId]);
     return result.rows[0] || null;
   }
 

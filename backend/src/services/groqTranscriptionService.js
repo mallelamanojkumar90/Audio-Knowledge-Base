@@ -123,14 +123,15 @@ class GroqTranscriptionService {
       file: file,
       model: 'whisper-large-v3',
       language: 'en',
-      response_format: 'json', // Use simple JSON
+      response_format: 'verbose_json', // Use verbose_json to get confidence scores
     });
 
-    log(`Groq API Response for ${originalFilename}: ${JSON.stringify(transcription).substring(0, 200)}...`);
+    log(`Groq API Response for ${originalFilename} (first 200 chars): ${JSON.stringify(transcription).substring(0, 200)}...`);
 
     const transcriptText = transcription.text || '';
+    const confidenceScore = this.calculateConfidence(transcription.segments);
 
-    log(`Groq transcription completed for: ${originalFilename}. Text length: ${transcriptText.length}`);
+    log(`Groq transcription completed for: ${originalFilename}. Text length: ${transcriptText.length}, Confidence: ${confidenceScore}`);
 
     if (transcriptText.length === 0) {
         log(`WARNING: Transcription is empty! Raw response: ${JSON.stringify(transcription)}`);
@@ -139,11 +140,36 @@ class GroqTranscriptionService {
     return {
       text: transcriptText,
       language: 'en',
-      duration: 0,
-      segments: [],
+      duration: transcription.duration || 0,
+      segments: transcription.segments || [],
       status: 'completed',
-      confidenceScore: 0.95
+      confidenceScore: confidenceScore
     };
+  }
+
+  /**
+   * Calculate average confidence score from segments
+   */
+  calculateConfidence(segments) {
+    if (!segments || segments.length === 0) return 0.0;
+
+    let totalConfidence = 0;
+    let validSegments = 0;
+
+    for (const segment of segments) {
+      if (segment.avg_logprob !== undefined) {
+        // Convert log probability to linear probability (0-1)
+        // avg_logprob is usually negative. e.g. -0.1 -> 0.9
+        const probability = Math.exp(segment.avg_logprob);
+        totalConfidence += probability;
+        validSegments++;
+      }
+    }
+
+    if (validSegments === 0) return 0.0;
+    
+    // Return average, capped at 1.0
+    return Math.min(totalConfidence / validSegments, 1.0);
   }
 
   /**
@@ -178,7 +204,9 @@ class GroqTranscriptionService {
         transcriptions.push({
           text: chunkResult.text || '', // Ensure string
           startTime: chunks[i].startTime,
-          endTime: chunks[i].endTime
+          endTime: chunks[i].endTime,
+          confidenceScore: chunkResult.confidenceScore || 0,
+          segments: chunkResult.segments
         });
       } catch (error) {
         log(`Error transcribing chunk ${i + 1}: ${error.message}`);
@@ -193,8 +221,20 @@ class GroqTranscriptionService {
     // Combine transcriptions
     let combinedText = transcriptions.map(t => t.text).join(' ').trim();
     
+    // Calculate global confidence score (weighted by text length as proxy for duration/importance)
+    let totalWeightedConfidence = 0;
+    let totalWeight = 0;
+
+    for (const t of transcriptions) {
+        const weight = t.text.length || 1; // logical weight
+        totalWeightedConfidence += (t.confidenceScore * weight);
+        totalWeight += weight;
+    }
+
+    const globalConfidence = totalWeight > 0 ? totalWeightedConfidence / totalWeight : 0;
+
     // Debug log
-    log(`Groq chunked transcription completed. Total text length: ${combinedText.length}`);
+    log(`Groq chunked transcription completed. Total text length: ${combinedText.length}, Global Confidence: ${globalConfidence}`);
 
     if (combinedText.length === 0 && transcriptions.length > 0) {
       log('WARNING: Transcription segments found but combined text is empty.');
@@ -204,9 +244,9 @@ class GroqTranscriptionService {
       text: combinedText,
       language: 'en',
       duration: null,
-      segments: [],
+      segments: transcriptions.flatMap(t => t.segments || []), // Combine all segments
       status: 'completed',
-      confidenceScore: 0.95,
+      confidenceScore: globalConfidence,
       chunked: true,
       chunkCount: chunks.length
     };

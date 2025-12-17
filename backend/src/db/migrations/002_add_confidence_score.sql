@@ -1,0 +1,2 @@
+ALTER TABLE transcripts
+ADD COLUMN IF NOT EXISTS confidence_score FLOAT DEFAULT NULL;

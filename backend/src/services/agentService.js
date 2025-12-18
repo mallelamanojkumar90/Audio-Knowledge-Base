@@ -32,7 +32,18 @@ class AgentService {
             return results.map(doc => doc.pageContent).join('\n\n');
           }
         } else {
-          console.log('[Tool] Transcript not in Pinecone yet, will use fallback');
+          console.log('[Tool] Transcript not in Pinecone yet');
+          
+          // Auto-index if we have transcript text
+          if (transcriptText && transcriptText.length > 0) {
+            console.log('[Tool] Triggering background indexing...');
+            // Don't wait for this - let it happen in background
+            pineconeService.storeTranscript(audioFileId, transcriptText)
+              .then(() => console.log(`[Tool] ✅ Transcript ${audioFileId} indexed in Pinecone`))
+              .catch(err => console.log(`[Tool] ⚠️ Indexing failed: ${err.message}`));
+          }
+          
+          console.log('[Tool] Using fallback search for now');
         }
       }
     } catch (error) {

@@ -271,6 +271,13 @@ AI_PROVIDER=anthropic # Claude models
 - Subsequent messages are faster
 - Consider using OpenAI embeddings for better performance
 
+### "Transcript not in Pinecone yet"
+
+- **Cause**: Transcript indexing happens asynchronously in the background
+- **Solution**: Wait a few seconds and try again, or run `npm run check-pinecone` in the backend folder
+- The system automatically triggers indexing and uses keyword fallback in the meantime
+- See [PINECONE_INTEGRATION.md](./PINECONE_INTEGRATION.md) for detailed troubleshooting
+
 ## 🧠 Agentic AI Architecture
 
 The application uses a **ReAct (Reasoning and Acting)** architecture that goes beyond simple RAG:
@@ -323,11 +330,12 @@ The agent can chain tools together:
 4. Finds: "Python first released in 1991, conceived in late 1980s"
 5. Agent synthesizes: "The speaker mentioned 1989, which is close. Implementation started in 1989 but it was first released in 1991."
 
-## �📚 Additional Documentation
+## 📚 Additional Documentation
 
 - **[Agentic AI Documentation](./AGENTIC_AI_DOCUMENTATION.md)**: Deep dive into ReAct architecture and tools
 - **[Email Integration Guide](./EMAIL_INTEGRATION_GUIDE.md)**: Configure email functionality (Gmail, Outlook, SMTP)
-- **[Pinecone Setup Guide](./PINECONE_SETUP.md)**: Enable semantic search with Pinecone
+- **[Pinecone Integration Guide](./PINECONE_INTEGRATION.md)**: Complete guide to vector search setup and troubleshooting
+- **[Pinecone Setup Guide](./PINECONE_SETUP.md)**: Quick start for Pinecone
 - **[Chat Setup Guide](./CHAT_SETUP_GUIDE.md)**: Detailed chat configuration
 - **[File Upload Guide](./FILE_UPLOAD_GUIDE.md)**: Upload best practices
 - **[How to Run](./HOW_TO_RUN.md)**: Step-by-step startup guide

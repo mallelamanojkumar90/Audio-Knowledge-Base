@@ -7,18 +7,19 @@ class Transcript {
       transcriptText,
       wordCount = null,
       language = 'en',
-      confidenceScore = null
+      confidenceScore = null,
+      segments = []
     } = data;
 
     const query = `
       INSERT INTO transcripts (
-        audio_file_id, transcript_text, word_count, language, confidence_score
+        audio_file_id, transcript_text, word_count, language, confidence_score, segments
       )
-      VALUES ($1, $2, $3, $4, $5)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
 
-    const values = [audioFileId, transcriptText, wordCount, language, confidenceScore];
+    const values = [audioFileId, transcriptText, wordCount, language, confidenceScore, JSON.stringify(segments)];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
@@ -35,14 +36,14 @@ class Transcript {
     return result.rows[0] || null;
   }
 
-  static async update(audioFileId, transcriptText, wordCount = null, confidenceScore = null) {
+  static async update(audioFileId, transcriptText, wordCount = null, confidenceScore = null, segments = []) {
     const query = `
       UPDATE transcripts
-      SET transcript_text = $1, word_count = $2, confidence_score = $3, updated_at = CURRENT_TIMESTAMP
-      WHERE audio_file_id = $4
+      SET transcript_text = $1, word_count = $2, confidence_score = $3, segments = $4, updated_at = CURRENT_TIMESTAMP
+      WHERE audio_file_id = $5
       RETURNING *
     `;
-    const result = await pool.query(query, [transcriptText, wordCount, confidenceScore, audioFileId]);
+    const result = await pool.query(query, [transcriptText, wordCount, confidenceScore, JSON.stringify(segments), audioFileId]);
     return result.rows[0] || null;
   }
 

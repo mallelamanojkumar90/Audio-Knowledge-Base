@@ -79,11 +79,13 @@ exports.generateTranscript = asyncHandler(async (req, res) => {
     );
 
     // Save transcript to database
+    // Save transcript to database
     const transcriptData = {
       audioFileId: parseInt(audioFileId),
       transcriptText: transcriptionResult.text,
       language: transcriptionResult.language,
       confidenceScore: transcriptionResult.confidenceScore,
+      segments: transcriptionResult.segments,
       status: transcriptionResult.status
     };
 

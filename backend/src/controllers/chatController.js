@@ -83,9 +83,10 @@ exports.sendMessage = asyncHandler(async (req, res) => {
     [conversationId, 'user', message]
   );
 
-  // 5. Generate Answer via RAG
+  // 5. Generate Answer via Agent
   console.log(`Generating answer for file ${fileId}...`);
-  const result = await ragService.generateAnswer(
+  const agentService = require('../services/agentService');
+  const result = await agentService.generateResponse(
     fileId,
     transcript.transcript_text,
     message,

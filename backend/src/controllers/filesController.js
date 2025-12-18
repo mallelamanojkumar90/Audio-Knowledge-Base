@@ -66,6 +66,7 @@ exports.createFile = asyncHandler(async (req, res) => {
   try {
     const transcriptionService = require('../services/groqTranscriptionService'); // Using Groq
     const { Transcript } = require('../models');
+    const pineconeService = require('../services/pineconeService');
     
     console.log('Transcription service loaded successfully');
 
@@ -97,6 +98,17 @@ exports.createFile = asyncHandler(async (req, res) => {
         await AudioFile.updateStatus(file.id, 'completed');
         
         console.log(`Transcription completed for file: ${file.original_filename}`);
+
+        // Store in Pinecone for semantic search (async, don't wait)
+        if (transcriptionResult.text && transcriptionResult.text.length > 0) {
+          pineconeService.storeTranscript(file.id, transcriptionResult.text)
+            .then(() => {
+              console.log(`✅ Transcript stored in Pinecone for file ${file.id}`);
+            })
+            .catch(err => {
+              console.log(`⚠️ Failed to store in Pinecone (will use fallback search): ${err.message}`);
+            });
+        }
       } catch (error) {
         // Update status to failed
         await AudioFile.updateStatus(file.id, 'failed');

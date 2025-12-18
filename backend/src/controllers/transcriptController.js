@@ -79,7 +79,6 @@ exports.generateTranscript = asyncHandler(async (req, res) => {
     );
 
     // Save transcript to database
-    // Save transcript to database
     const transcriptData = {
       audioFileId: parseInt(audioFileId),
       transcriptText: transcriptionResult.text,
@@ -93,6 +92,18 @@ exports.generateTranscript = asyncHandler(async (req, res) => {
 
     // Update audio file status to completed
     await AudioFile.updateStatus(audioFileId, 'completed');
+
+    // Store in Pinecone (async, don't block response)
+    const pineconeService = require('../services/pineconeService');
+    if (transcriptionResult.text && transcriptionResult.text.length > 0) {
+      pineconeService.storeTranscript(parseInt(audioFileId), transcriptionResult.text)
+        .then(() => {
+          console.log(`✅ Transcript stored in Pinecone for file ${audioFileId}`);
+        })
+        .catch(err => {
+          console.log(`⚠️ Failed to store in Pinecone: ${err.message}`);
+        });
+    }
 
     res.status(201).json({
       success: true,

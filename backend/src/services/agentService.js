@@ -1,58 +1,72 @@
 const aiModelService = require('./aiModelService');
 const ragService = require('./ragService');
+const pineconeService = require('./pineconeService');
+const emailService = require('./emailService');
 const { Transcript } = require('../models');
-const { DuckDuckGoSearch } = require('@langchain/community/tools/duckduckgo_search');
 
 class AgentService {
   constructor() {
-    this.searchTool = new DuckDuckGoSearch({ maxResults: 5 });
+    // Initialize Pinecone on startup
+    pineconeService.initialize().catch(err => {
+      console.log('Pinecone initialization deferred:', err.message);
+    });
   }
 
   /**
    * Tool: Search Transcript
-   * Semantic search over the transcript (with fallback to simple search)
+   * Tries Pinecone semantic search first, falls back to keyword search
    */
   async toolSearchTranscript(audioFileId, transcriptText, query) {
     console.log(`[Tool] Searching transcript for: ${query}`);
+    
+    // Try Pinecone first (best quality)
     try {
-      // Try semantic search first
-      const vectorStore = await ragService.getVectorStore(audioFileId, transcriptText);
-      const retriever = vectorStore.asRetriever({ k: 4 });
-      const docs = await retriever.getRelevantDocuments(query);
-      
-      if (docs.length === 0) return "No relevant information found in the transcript.";
-      
-      return docs.map(d => d.pageContent).join('\n\n');
+      if (pineconeService.isAvailable()) {
+        const hasVectors = await pineconeService.hasTranscript(audioFileId);
+        
+        if (hasVectors) {
+          console.log('[Tool] Using Pinecone semantic search...');
+          const results = await pineconeService.searchTranscript(audioFileId, query, 4);
+          
+          if (results.length > 0) {
+            return results.map(doc => doc.pageContent).join('\n\n');
+          }
+        } else {
+          console.log('[Tool] Transcript not in Pinecone yet, will use fallback');
+        }
+      }
     } catch (error) {
-      // Fallback to simple keyword search if embeddings aren't available
-      console.log('[Tool] Embeddings not available, using simple text search...');
-      
-      if (!transcriptText || transcriptText.length === 0) {
-        return "No transcript text available.";
-      }
-      
-      // Simple approach: split into paragraphs and find relevant ones
-      const paragraphs = transcriptText.split(/\n\n+/).filter(p => p.trim().length > 0);
-      const queryWords = query.toLowerCase().split(/\s+/);
-      
-      // Score each paragraph by keyword matches
-      const scored = paragraphs.map(para => {
-        const paraLower = para.toLowerCase();
-        const score = queryWords.reduce((sum, word) => {
-          return sum + (paraLower.includes(word) ? 1 : 0);
-        }, 0);
-        return { para, score };
-      }).filter(item => item.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 4); // Top 4 paragraphs
-      
-      if (scored.length === 0) {
-        // Return first few paragraphs as context
-        return paragraphs.slice(0, 3).join('\n\n');
-      }
-      
-      return scored.map(item => item.para).join('\n\n');
+      console.log('[Tool] Pinecone search failed, using fallback:', error.message);
     }
+
+    // Fallback to keyword search
+    console.log('[Tool] Using keyword search fallback...');
+    
+    if (!transcriptText || transcriptText.length === 0) {
+      return "No transcript text available.";
+    }
+    
+    // Simple approach: split into paragraphs and find relevant ones
+    const paragraphs = transcriptText.split(/\n\n+/).filter(p => p.trim().length > 0);
+    const queryWords = query.toLowerCase().split(/\s+/);
+    
+    // Score each paragraph by keyword matches
+    const scored = paragraphs.map(para => {
+      const paraLower = para.toLowerCase();
+      const score = queryWords.reduce((sum, word) => {
+        return sum + (paraLower.includes(word) ? 1 : 0);
+      }, 0);
+      return { para, score };
+    }).filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4); // Top 4 paragraphs
+    
+    if (scored.length === 0) {
+      // Return first few paragraphs as context
+      return paragraphs.slice(0, 3).join('\n\n');
+    }
+    
+    return scored.map(item => item.para).join('\n\n');
   }
 
   /**
@@ -113,13 +127,35 @@ class AgentService {
 
   /**
    * Tool: Send Summary Email
-   * Sends an email (Mock)
+   * Sends an email with summary content
    */
-  async toolSendSummaryEmail(recipient, summary) {
+  async toolSendSummaryEmail(recipient, summary, fileName = 'Audio Transcript') {
     console.log(`[Tool] Sending email to ${recipient}...`);
-    // Mock implementation
-    console.log(`Subject: Audio Transcript Summary\nTo: ${recipient}\nBody:\n${summary}`);
-    return `Email successfully sent to ${recipient}.`;
+    
+    try {
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(recipient)) {
+        return `Invalid email address: ${recipient}. Please provide a valid email address.`;
+      }
+
+      // Send email using the email service
+      const result = await emailService.sendTranscriptSummary(recipient, fileName, summary);
+      
+      if (result.success) {
+        if (result.mode === 'console') {
+          return `Email content has been logged to the console (email service not configured). To send actual emails, please configure EMAIL_PROVIDER in the environment variables.`;
+        } else {
+          return `Email successfully sent to ${recipient}. Message ID: ${result.messageId}`;
+        }
+      } else {
+        return `Failed to send email: ${result.message}. The content has been logged to the console.`;
+      }
+      
+    } catch (error) {
+      console.error('[Tool] Error in send_summary_email:', error);
+      return `Error sending email: ${error.message}`;
+    }
   }
 
   /**
